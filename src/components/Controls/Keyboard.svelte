@@ -10,12 +10,17 @@
 	function handleKeyButton(num) {
 		if (!$keyboardDisabled) {
 			if ($notes) {
+				// 评审修复 3:notes 模式只在空格上有效,避免覆盖已有用户填值
+				// 原实现在 candidates.add/clear 后无条件 userGrid.set($cursor, 0),
+				// 用户在已填非固定格切到 notes 按数字时会清空原值
+				if ($userGrid[$cursor.y][$cursor.x] !== 0) return;
+
 				if (num === 0) {
 					candidates.clear($cursor);
 				} else {
 					candidates.add($cursor, num);
 				}
-				userGrid.set($cursor, 0);
+				// 不再调 userGrid.set($cursor, 0):该格本来就是 0,无需重写
 			} else {
 				if ($candidates.hasOwnProperty($cursor.x + ',' + $cursor.y)) {
 					candidates.clear($cursor);

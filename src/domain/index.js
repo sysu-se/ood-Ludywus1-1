@@ -77,9 +77,24 @@ function normalizeSudokuInput(input) {
 		throw new TypeError('Serialized sudoku must include initialGrid/currentGrid or grid');
 	}
 
+	const initial = cloneGrid(initialSource);
+	const current = cloneGrid(currentSource);
+
+	// 评审修复 1:校验 clue 不变量——固定格(initialGrid 非 0)在 currentGrid 上必须保持原值
+	// 否则 createSudokuFromJSON 可以构造出"题面被篡改但 fixedCells 仍视为固定"的非法 Sudoku
+	for (let r = 0; r < SUDOKU_SIZE; r += 1) {
+		for (let c = 0; c < SUDOKU_SIZE; c += 1) {
+			if (initial[r][c] !== 0 && current[r][c] !== initial[r][c]) {
+				throw new TypeError(
+					`Sudoku snapshot violates clue immutability at (${r},${c}): initial=${initial[r][c]} current=${current[r][c]}`,
+				);
+			}
+		}
+	}
+
 	return {
-		initialGrid: cloneGrid(initialSource),
-		currentGrid: cloneGrid(currentSource),
+		initialGrid: initial,
+		currentGrid: current,
 	};
 }
 
@@ -751,11 +766,19 @@ export function createGame({ sudoku }) {
 }
 
 export function createGameFromJSON(json) {
-	const sudoku = createSudokuFromJSON(json?.sudoku ?? { initialGrid: createEmptyGrid(), currentGrid: createEmptyGrid() });
-	const past = json?.history?.past ?? [];
-	const future = json?.history?.future ?? [];
-	const failed = json?.failed ?? [];
-	const explore = json?.explore ?? null;
+	// 评审��复 4:fail-fast。原实现 json.sudoku 缺失时静默降级为空棋盘,掩盖损坏数据
+	if (!json || typeof json !== 'object') {
+		throw new TypeError('createGameFromJSON expects a serialized game object');
+	}
+	if (!json.sudoku) {
+		throw new TypeError('createGameFromJSON requires a sudoku field');
+	}
+
+	const sudoku = createSudokuFromJSON(json.sudoku);
+	const past = json.history?.past ?? [];
+	const future = json.history?.future ?? [];
+	const failed = json.failed ?? [];
+	const explore = json.explore ?? null;
 
 	return buildGame({
 		sudoku,

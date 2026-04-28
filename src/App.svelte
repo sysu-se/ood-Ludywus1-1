@@ -11,12 +11,16 @@
 	import Header from './components/Header/index.svelte';
 	import Modal from './components/Modal/index.svelte';
 
-	gameWon.subscribe(won => {
-		if (won) {
+	// 评审修复 5:用 reactive statement 边沿检测代替裸 subscribe,避免热重载下重复订阅
+	// 原实现 gameWon.subscribe(...) 没有 onDestroy 释放,组件被销毁/重挂载时遗留监听
+	let lastWonState = false;
+	$: {
+		if ($gameWon && !lastWonState) {
 			game.pause();
 			modal.show('gameover');
 		}
-	});
+		lastWonState = $gameWon;
+	}
 
 	onMount(() => {
 		let hash = location.hash;
