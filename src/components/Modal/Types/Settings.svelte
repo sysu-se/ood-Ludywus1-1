@@ -50,6 +50,7 @@
 	<Switch bind:checked={settings.highlightCells} text="Highlight cells in same row/column/box" id="highlight-cells" />
 	<Switch bind:checked={settings.highlightSame} text="Highlight cells with the same number" id="highlight-matching" />
 	<Switch bind:checked={settings.highlightConflicting} text="Highlight conflicting numbers" id="highlight-conflicting" />
+	<Switch bind:checked={settings.showCandidates} text="Show candidates in empty cells (HW2)" id="show-candidates" />
 </div>
 
 <div class="flex justify-end">

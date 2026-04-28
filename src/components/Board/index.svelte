@@ -5,6 +5,7 @@
 	import { settings } from '@sudoku/stores/settings';
 	import { cursor } from '@sudoku/stores/cursor';
 	import { candidates } from '@sudoku/stores/candidates';
+	import { gameSession } from '@sudoku/stores/session';
 	import Cell from './Cell.svelte';
 
 	function isSelected(cursorStore, x, y) {
@@ -27,6 +28,17 @@
 
 		return gridStore[cursorStore.y][cursorStore.x];
 	}
+
+	// HW2:决定每格 Cell 显示什么样的候选数
+	// 优先级:用户手动标记(Notes) > 自动候选数(showCandidates 开关) > 不显示
+	// 依赖 $session 触发响应,确保 grid 改变时候选数随之刷新
+	function pickCandidates(userMarks, value, showAuto, session, x, y) {
+		if (userMarks && userMarks.length > 0) return userMarks;
+		if (value === 0 && showAuto && session) {
+			return gameSession.getCandidates(y, x);
+		}
+		return undefined;
+	}
 </script>
 
 <div class="board-padding relative z-10">
@@ -42,7 +54,7 @@
 					<Cell {value}
 					      cellY={y + 1}
 					      cellX={x + 1}
-					      candidates={$candidates[x + ',' + y]}
+					      candidates={pickCandidates($candidates[x + ',' + y], value, $settings.showCandidates, $gameSession, x, y)}
 					      disabled={$gamePaused}
 					      selected={isSelected($cursor, x, y)}
 					      userNumber={$grid[y][x] === 0}
