@@ -13,6 +13,32 @@
 	$: hintsAvailable = $hints > 0;
 	$: isExploring = $gameSession?.isExploring ?? false;
 
+	// HW2 加分项 #3:Hint 解释能力 — 当前选中格的推理上下文(显式响应快照变化以保持新鲜)
+	let explanation = null;
+	$: cursorKey = `${$cursor.x},${$cursor.y}`;
+	$: gridSnapshot = $gameSession?.userGrid;
+
+	function refreshExplanation() {
+		if (!explanation) return;
+		if ($cursor.x === null || $cursor.y === null) {
+			explanation = null;
+			return;
+		}
+		explanation = gameSession.explainCell($cursor.y, $cursor.x);
+	}
+
+	// 当选中格或棋盘变化时,如果 popover 在显示,刷新它
+	$: if (explanation && (cursorKey || gridSnapshot)) refreshExplanation();
+
+	function handleExplain() {
+		if ($cursor.x === null || $cursor.y === null) return;
+		if (explanation) {
+			explanation = null; // 已开则关闭
+		} else {
+			explanation = gameSession.explainCell($cursor.y, $cursor.x);
+		}
+	}
+
 	function handleHint() {
 		if (hintsAvailable) {
 			if ($candidates.hasOwnProperty($cursor.x + ',' + $cursor.y)) {
@@ -51,6 +77,18 @@
 	<button class="btn btn-round" disabled={$gamePaused || !$canRedo} title="Redo" on:click={redoMove}>
 		<svg class="icon-outline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10h-10a8 8 90 00-8 8v2M21 10l-6 6m6-6l-6-6" />
+		</svg>
+	</button>
+
+	<!-- HW2 加分项 #3:Explain 按钮,显示当前选中格的推理上下文 -->
+	<button
+		class="btn btn-round"
+		disabled={$gamePaused || $cursor.x === null || $cursor.y === null}
+		on:click={handleExplain}
+		title="Explain selected cell"
+	>
+		<svg class="icon-outline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 		</svg>
 	</button>
 
@@ -100,6 +138,42 @@
 	{/if}
 
 </div>
+
+<!-- HW2 加分项 #3:Explain popover,显示选中格的候选数与各方向已用数字 -->
+{#if explanation}
+	<div
+		class="explain-popover"
+		style="position: fixed; left: 50%; bottom: 220px; transform: translateX(-50%); z-index: 60; max-width: 90vw; width: 22rem; padding: 0.85rem 1rem; background: white; border: 2px solid #5c6bc0; border-radius: 0.5rem; box-shadow: 0 8px 25px rgba(0,0,0,0.15); font-size: 0.88rem; line-height: 1.45; color: #1f2937;"
+	>
+		<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+			<strong>位置 (行 {explanation.row + 1}, 列 {explanation.col + 1})</strong>
+			<button on:click={() => (explanation = null)} style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #6b7280;">×</button>
+		</div>
+
+		{#if explanation.isFixed}
+			<div style="color: #d97706;">题面固定格,值 = <strong>{explanation.currentValue}</strong>,无法改写</div>
+		{:else if explanation.currentValue !== 0}
+			<div>当前已填值:<strong>{explanation.currentValue}</strong></div>
+			<div style="margin-top: 0.3rem; color: #6b7280;">候选数(空格时):无(已填)</div>
+		{:else if explanation.candidates.length === 0}
+			<div style="color: #dc2626;">无合法候选 — 当前局面在此格已无解,可能存在冲突</div>
+		{:else if explanation.candidates.length === 1}
+			<div style="color: #059669;">
+				<strong>唯一候选 = {explanation.candidates[0]}</strong>(naked-single,可直接填入)
+			</div>
+		{:else}
+			<div>
+				合法候选:<strong>{explanation.candidates.join(', ')}</strong>
+			</div>
+		{/if}
+
+		<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #e5e7eb; font-size: 0.82rem; color: #4b5563;">
+			<div>同行已用:{explanation.excludedByRow.length ? explanation.excludedByRow.join(' ') : '(无)'}</div>
+			<div>同列已用:{explanation.excludedByCol.length ? explanation.excludedByCol.join(' ') : '(无)'}</div>
+			<div>同宫已用:{explanation.excludedByBox.length ? explanation.excludedByBox.join(' ') : '(无)'}</div>
+		</div>
+	</div>
+{/if}
 
 
 <style>

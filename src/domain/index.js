@@ -377,6 +377,41 @@ export function createSudoku(input) {
 		return gridFingerprint(currentGrid);
 	}
 
+	// HW2 加分项 #3:Hint 解释能力
+	// 返回某格的完整推理上下文:候选数 + 同行/列/宫各自已占用的数字
+	// UI 据此可向用户展示"为什么这一格只能填 X"——把推理过程透明化
+	function explainCell(row, col) {
+		normalizeIndex(row, 'row');
+		normalizeIndex(col, 'col');
+
+		const used = { row: new Set(), col: new Set(), box: new Set() };
+
+		for (let i = 0; i < SUDOKU_SIZE; i += 1) {
+			if (currentGrid[row][i] !== 0) used.row.add(currentGrid[row][i]);
+			if (currentGrid[i][col] !== 0) used.col.add(currentGrid[i][col]);
+		}
+
+		const boxRow = Math.floor(row / BOX_SIZE) * BOX_SIZE;
+		const boxCol = Math.floor(col / BOX_SIZE) * BOX_SIZE;
+		for (let dr = 0; dr < BOX_SIZE; dr += 1) {
+			for (let dc = 0; dc < BOX_SIZE; dc += 1) {
+				const v = currentGrid[boxRow + dr][boxCol + dc];
+				if (v !== 0) used.box.add(v);
+			}
+		}
+
+		return {
+			row,
+			col,
+			currentValue:  currentGrid[row][col],
+			isFixed:       fixedCells[row][col],
+			candidates:    computeCandidates(currentGrid, fixedCells, row, col),
+			excludedByRow: Array.from(used.row).sort((a, b) => a - b),
+			excludedByCol: Array.from(used.col).sort((a, b) => a - b),
+			excludedByBox: Array.from(used.box).sort((a, b) => a - b),
+		};
+	}
+
 	return {
 		getGrid() {
 			return cloneGrid(currentGrid);
@@ -399,6 +434,7 @@ export function createSudoku(input) {
 		getAllCandidates,
 		findNextDeducible,
 		fingerprint,
+		explainCell,
 
 		guess(move) {
 			const normalizedMove = normalizeMove(move);
@@ -546,6 +582,13 @@ function buildGame({ sudoku, past = [], future = [], failed = [], explore = null
 				: sudoku.findNextDeducible();
 		},
 
+		// HW2 加分项 #3:Hint 解释能力(facade 转发,explore 期间路由到子会话)
+		explainCell(row, col) {
+			return exploreSession
+				? exploreSession.explainCell(row, col)
+				: sudoku.explainCell(row, col);
+		},
+
 		// HW2 动作:applyHint 是写操作,必须经过 history(主或子)
 		// 不传 position → 使用 findNextDeducible 自动推定
 		// 传 position → 仅用候选数推定该格(若该格只有一个候选则填入,否则失败)
@@ -623,16 +666,24 @@ function buildGame({ sudoku, past = [], future = [], failed = [], explore = null
 			return exploreSession ? exploreSession.canRedo() : futureTransitions.length > 0;
 		},
 
-		// ====== HW2:Explore Mode ======
+		// ====== HW2:Explore Mode(加分项 #1:支持嵌套树状分支)======
 
 		isExploring() {
 			return exploreSession !== null;
 		},
 
-		// 进入探索:深拷贝当前主局面为子 Sudoku,创建独立子 Game
-		// 主局面与探索局面是复制关系(无引用共享);子 Game 拥有独立的撤销/重做栈
+		// 加分项 #1:返回当前嵌套深度(0 = 主局面,N = 嵌套 N 层)
+		// 递归向下数到第一个无 exploreSession 的层
+		getExploreDepth() {
+			return exploreSession ? 1 + exploreSession.getExploreDepth() : 0;
+		},
+
+		// 进入探索:深拷贝当前局面为子 Sudoku,创建独立子 Game
+		// 加分项 #1:已在 explore 中时,递归到最深层 enter,形成嵌套树状分支
 		enterExplore() {
-			if (exploreSession) return false;
+			if (exploreSession) {
+				return exploreSession.enterExplore();
+			}
 
 			const childSudoku = sudoku.clone();
 			exploreOrigin = {
@@ -643,9 +694,15 @@ function buildGame({ sudoku, past = [], future = [], failed = [], explore = null
 			return true;
 		},
 
-		// 重置到探索起点:保留在 explore 中,但子局面回到 enter 时的状态(加分项)
+		// 重置到探索起点:保留在 explore 中,但子局面回到 enter 时的状态
+		// 加分项 #1:嵌套时只重置最深层(用户当前正在探索的那层)
 		resetExplore() {
 			if (!exploreSession) return false;
+
+			// 如果子层也在 explore,把 reset 委托到最深层
+			if (exploreSession.isExploring()) {
+				return exploreSession.resetExplore();
+			}
 
 			const childSudoku = createSudoku({
 				initialGrid: sudoku.getInitialGrid(),
@@ -655,8 +712,14 @@ function buildGame({ sudoku, past = [], future = [], failed = [], explore = null
 			return true;
 		},
 
-		// 退出探索:'commit' 把子局面差异折叠为复合 transition 入主栈,'abandon' 直接丢弃
+		// 退出探索:'commit' 把子局面差异折叠为复合 transition 入"父层"主栈,'abandon' 直接丢弃
+		// 加分项 #1:嵌套时,commit/abandon 只作用于"最深层 vs 它的父层";
+		//   不会跨层级把孙的修改一次性合到祖父——保持一层一层提交的语义
 		exitExplore(action) {
+			// 若子层还在 explore,递归向下交给"最深的父-子对"处理
+			if (exploreSession && exploreSession.isExploring()) {
+				return exploreSession.exitExplore(action);
+			}
 			if (!exploreSession) return false;
 			if (action !== 'commit' && action !== 'abandon') {
 				throw new TypeError('exitExplore action must be "commit" or "abandon"');

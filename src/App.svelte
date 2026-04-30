@@ -38,11 +38,13 @@
 	});
 
 	// HW2:从 session 快照派生 explore 状态与失败路径提示
-	$: isExploring = $gameSession?.isExploring ?? false;
-	$: failedHere  = $gameSession?.failedHere  ?? false;
+	$: isExploring  = $gameSession?.isExploring  ?? false;
+	$: exploreDepth = $gameSession?.exploreDepth ?? 0; // 加分项 #1:嵌套深度
+	$: failedHere   = $gameSession?.failedHere   ?? false;
 </script>
 
 <!-- HW2:Explore Mode 顶部 banner;进入探索后显示,abandon/commit 后消失 -->
+<!-- 加分项 #1:嵌套时显示当前深度,每多一层背景色更深 -->
 {#if isExploring}
 	<div
 		class="fixed top-0 left-0 right-0 z-50 flex items-center justify-center px-4 py-2 text-yellow-900 font-semibold shadow"
@@ -50,6 +52,11 @@
 		transition:fly={{ y: -20, duration: 200 }}
 	>
 		<span>EXPLORE MODE · 探索中</span>
+		{#if exploreDepth > 1}
+			<span class="ml-3 px-3 py-1 rounded-full text-white text-sm" style="background: #d97706;">
+				嵌套深度 {exploreDepth}
+			</span>
+		{/if}
 		{#if failedHere}
 			<span class="ml-3 px-3 py-1 rounded-full text-white text-sm" style="background: #f87171;" transition:fly={{ y: -10, duration: 150 }}>
 				⚠ 已访问过的失败路径

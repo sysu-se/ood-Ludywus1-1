@@ -9,9 +9,11 @@ describe('HW2 explore - enter / commit / abandon', () => {
 		expect(game.isExploring()).toBe(false);
 		expect(game.enterExplore()).toBe(true);
 		expect(game.isExploring()).toBe(true);
+		expect(game.getExploreDepth()).toBe(1);
 
-		// 重复 enter 应返回 false(已在 explore 中)
-		expect(game.enterExplore()).toBe(false);
+		// 加分项 #1:再次 enter 形成嵌套树状分支(深度 +1),返回 true
+		expect(game.enterExplore()).toBe(true);
+		expect(game.getExploreDepth()).toBe(2);
 	});
 
 	it('explore 期间 guess 不进入主栈', async () => {

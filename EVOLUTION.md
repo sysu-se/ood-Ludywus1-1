@@ -22,9 +22,9 @@ UI 上 Hint 按钮(`src/components/Controls/ActionBar/Actions.svelte:14-22`)走 
 
 数据在 Sudoku,动作在 Game,两者协作。
 
-候选数计算是"对当前 grid 的纯函数",与"是否赢了"、"哪些格冲突"是同一类问题——它们的输入都是当前局面(grid + fixedCells),输出都是无副作用的查询结果。把它放在 `Sudoku` 满足 SRP:`Sudoku` 已经是局面规则的中心,候选数也是规则的派生信息,放在一起复用同一套行/列/宫扫描代码。
+候选数计算是对当前 grid 的纯函数,与哪些格冲突是同一类问题——它们的输入都是当前局面(grid + fixedCells),输出都是无副作用的查询结果。把它放在 `Sudoku` 满足 SRP:`Sudoku` 已经是局面规则的中心,候选数也是规则的派生信息,放在一起复用同一套行/列/宫扫描代码。
 
-但"使用一次提示并能撤销"是会话层的事件:它必须写入 history,必须可被 `undo()` 回退,必须扣 hint 计数。这些只有 `Game` 能感知。所以 `applyHint` 是 `Game` 的写操作。
+但使用一次提示并能撤销是会话层的事件:它必须写入 history,必须可被 `undo()` 回退,必须扣 hint 计数。这些只有 `Game` 能感知。所以 `applyHint` 是 `Game` 的写操作。
 
 如果把候选数也塞进 `Game`,`Game` 就变成"领域规则 + 会话状态"两件事——这正是 HW1 中要避免的耦合。如果反过来把 `applyHint` 也塞进 `Sudoku`,`Sudoku` 就要直接操作 `pastTransitions`,变成"局面 + 历史"两件事,等价于把 `Game` 拆解。
 
@@ -46,7 +46,7 @@ function enterExplore() {
 }
 ```
 
-进入后,父 Game 的所有写操作(`guess` / `undo` / `redo`)与读操作(`getGrid` / `getCandidates` / `getInvalidCells` / `isSolved`)都检查 `exploreSession`,若不为 null 则委托给它(`src/domain/index.js:417-462`,`501-527`)。子 Game 拥有自己独立的 `pastTransitions` / `futureTransitions`,完全不影响主栈。
+进入后,父 Game 的所有写操作(`guess` / `undo` / `redo`)与读操作(`getGrid` / `getCandidates` / `getInvalidCells` / `isSolved`)都检查 `exploreSession`,若不为 null 则委托给它(`src/domain/index.js:417-462`,`501-527`)。子 Game 拥有自己独立的 `pastTransitions` / `futureTransitions`,不影响主栈。
 
 退出 explore 有两种方式:
 
@@ -54,7 +54,7 @@ function enterExplore() {
 
 **abandon**(`src/domain/index.js:638-643`):若子局面当下有冲突,把子局面 fingerprint 加入 `failedFingerprints`;直接丢弃 `exploreSession`,主局面零变化。
 
-**重置探索**(`resetExplore`,加分项):保留在 explore 中,但子局面回到 enter 时的 `exploreOrigin.originGrid`,子栈清空——等价于"重新选另一候选"。
+**重置探索**(`resetExplore`):保留在 explore 中,但子局面回到 enter 时的 `exploreOrigin.originGrid`,子栈清空——等价于"重新选另一候选"。
 
 ---
 
@@ -62,7 +62,7 @@ function enterExplore() {
 
 **复制关系,深拷贝,无引用共享。**
 
-进入 explore 时调用 `sudoku.clone()`(`src/domain/index.js:382-387`),这个方法已经在 HW1.1 实现为完全独立的副本——内部 `currentGrid` / `initialGrid` / `fixedCells` 都是新数组。所以子 Sudoku 与主 Sudoku 之间没有任何共享内存,主局面在 explore 期间永远不会被无意修改。
+进入 explore 时调用 `sudoku.clone()`(`src/domain/index.js:382-387`),这个方法已经在 HW1.1 实现为完全独立的副本——内部 `currentGrid` / `initialGrid` / `fixedCells` 都是新数组。所以子 Sudoku 与主 Sudoku 之间没有任何共享内存,主局面在 explore 期间不会被无意修改。
 
 提交时(`exitExplore('commit')`):
 
@@ -76,7 +76,7 @@ function enterExplore() {
 
 放弃时(`exitExplore('abandon')`):
 
-若子局面有冲突,把子局面 fingerprint 加入失败记忆集合(详见 Q5/Q6)
+若子局面有冲突,把子局面 fingerprint 加入失败记忆集合
 
 把 `exploreSession` 与 `exploreOrigin` 设为 null
 
@@ -118,7 +118,7 @@ HW1.1 里 `guess` 是一次单格写入,直接 push 一条 transition。HW2 的 
 
 **2. transition 是裸对象,扩展 type 字段需要兜底兼容。**
 
-HW1.1 的 transition 没有 type 字段。HW2 升级到判别联合后,所有处理 transition 的代码(`cloneTransition` / `serializeTransition` / `undoMain` / `redoMain`)都要做 type 分发。旧 JSON 的反序列化也要兜底——把无 type 的当 'guess'。如果 HW1 一开始就有 `{type, ...}` 框架,后续扩展是无痛的。
+HW1.1 的 transition 没有 type 字段。HW2 升级到判别联合后,所有处理 transition 的代码(`cloneTransition` / `serializeTransition` / `undoMain` / `redoMain`)都要做 type 分发。旧 JSON 的反序列化也要兜底——把无 type 的当 'guess'。如果 HW1 一开始就有 `{type, ...}` 框架,后续扩展是兼容的。
 
 **3. `Sudoku` 不知道"会话派生概念",导致 Hint 写在哪一层是临时决策。**
 
